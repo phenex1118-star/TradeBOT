@@ -115,7 +115,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 4. 漸進式登入頁面
+# 4. 漸進式登入頁面與 TG 申請教學
 # ==========================================
 has_tg_credentials = bool(user_cfg["tg_token"] and user_cfg["tg_chat_id"])
 
@@ -124,9 +124,12 @@ if not has_tg_credentials and not st.session_state.skip_login:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.title("📈 策略工作站系統登入")
-        st.write("請輸入『您自己』的 Telegram 通訊憑證。此資料僅存在您的手機瀏覽器中，安全隔離。")
+        st.write("請輸入您的 Telegram 通訊憑證。此資料僅存在您的瀏覽器中，系統不會進行任何雲端備份。")
+        
+        # 輸入區
         temp_token = st.text_input("🤖 Telegram Bot Token", type="password")
         temp_chat_id = st.text_input("👤 Telegram Chat ID", type="password")
+        
         c_btn1, c_btn2 = st.columns(2)
         with c_btn1:
             if st.button("🔓 登入", type="primary", use_container_width=True) and temp_token and temp_chat_id:
@@ -136,6 +139,27 @@ if not has_tg_credentials and not st.session_state.skip_login:
             if st.button("➡️ 略過 (僅看盤)", use_container_width=True):
                 st.session_state.skip_login = True
                 st.rerun()
+        
+        st.write("---")
+        # 📖 新增：給新手的 Telegram 申請折疊說明
+        with st.expander("❓ 第一次使用？如何獲取 Telegram Token 與 ID？"):
+            st.markdown("""
+            **只要 3 分鐘，建立您專屬的私密警報機器人：**
+            
+            **步驟一：取得 Bot Token**
+            1. 在 Telegram 搜尋列尋找 `@BotFather` (帶有官方藍勾勾)。
+            2. 點擊對話後，輸入 `/newbot` 建立新機器人。
+            3. 幫您的機器人取個顯示名稱 (例如：`戰情通報`)，以及使用者帳號 (必須以 `bot` 結尾，例如 `MyTrade_bot`)。
+            4. 成功後，BotFather 會給您一串專屬金鑰（例如 `1234567890:ABCdef...`），這就是您的 **Bot Token**，請複製貼上到上方。
+
+            **步驟二：取得 Chat ID**
+            1. 在 Telegram 搜尋 `@userinfobot`。
+            2. 點擊 `Start`，它會立刻回覆您的帳號資訊，其中 `Id` 後面的數字（例如 `1087654321`）就是您的 **Chat ID**。
+            
+            **步驟三：啟動您的機器人**
+            1. 在 Telegram 搜尋您剛剛建立的機器人名稱。
+            2. 點擊進入並按下 `Start`，您的專屬戰情室就連線完成了！
+            """)
     st.stop()
 
 # ==========================================
