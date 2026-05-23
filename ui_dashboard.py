@@ -148,18 +148,18 @@ if not has_tg_credentials and not st.session_state.skip_login:
             <p style="font-size: 16px; color: #EEBBC3; font-weight: bold;">💡 只要 3 分鐘，建立您專屬的私密警報機器人：</p>
             
             <p><span style="color: #F8CA00; font-size: 18px; font-weight: bold;">步驟一：取得 Bot Token 🔑</span><br>
-            1. 在 Telegram 搜尋列尋找 <code style="color:#F8CA00;">@BotFather</code> (帶有官方藍勾勾)。<br>
-            2. 點擊對話後，輸入 <code>/newbot</code> 建立新機器人。<br>
-            3. 幫您的機器人取個顯示名稱 (例如：<code>戰情通報</code>)，以及使用者帳號 (必須以 <code>bot</code> 結尾，例如 <code>MyTrade_bot</code>)。<br>
-            4. 成功後，BotFather 會給您一串專屬金鑰（例如 <code>1234567890:ABCdef...</code>），這就是您的 <strong>Bot Token</strong>，請複製貼上到上方。</p>
+                1. 在 Telegram 搜尋列尋找 <code style="color:#F8CA00;">@BotFather</code> (帶有官方藍勾勾)。<br>
+                2. 點擊對話後，輸入 <code>/newbot</code> 建立新機器人。<br>
+                3. 幫您的機器人取個顯示名稱 (例如：<code>戰情通報</code>)，以及使用者帳號 (必須以 <code>bot</code> 結尾，例如 <code>MyTrade_bot</code>)。<br>
+                4. 成功後，BotFather 會給您一串專屬金鑰（例如 <code>1234567890:ABCdef...</code>），這就是您的 <strong>Bot Token</strong>，請複製貼上到上方。</p>
 
             <p><span style="color: #00E676; font-size: 18px; font-weight: bold;">步驟二：取得 Chat ID 👤</span><br>
-            1. 在 Telegram 搜尋 <code style="color:#00E676;">@userinfobot</code>。<br>
-            2. 點擊 <code>Start</code>，它會立刻回覆您的帳號資訊，其中 <code>Id</code> 後面的數字（例如 <code>1087654321</code>）就是您的 <strong>Chat ID</strong>。</p>
+                1. 在 Telegram 搜尋 <code style="color:#00E676;">@userinfobot</code>。<br>
+                2. 點擊 <code>Start</code>，它會立刻回覆您的帳號資訊，其中 <code>Id</code> 後面的數字（例如 <code>1087654321</code>）就是您的 <strong>Chat ID</strong>。</p>
             
             <p><span style="color: #00D2FF; font-size: 18px; font-weight: bold;">步驟三：啟動您的機器人 🚀</span><br>
-            1. 在 Telegram 搜尋您剛剛建立的機器人名稱。<br>
-            2. 點擊進入並按下 <code>Start</code>，您的專屬戰情室就連線完成了！</p>
+                1. 在 Telegram 搜尋您剛剛建立的機器人名稱。<br>
+                2. 點擊進入並按下 <code>Start</code>，您的專屬戰情室就連線完成了！</p>
             </div>
             """, unsafe_allow_html=True)
     st.stop()
