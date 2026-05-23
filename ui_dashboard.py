@@ -146,12 +146,24 @@ else:
         st.session_state.skip_login = False
         st.rerun()
 
+#  ✅ 正確的順序（先把功能寫好，底下再呼叫）
 st.sidebar.write("---")
 display_name = grp_data.get("custom_name") if grp_data.get("custom_name") else active_group
 
 st.sidebar.subheader(f"🎯 參數調整 ({display_name})")
 grp_data["logic"] = st.sidebar.selectbox("多重條件觸發規則", ["AND (嚴格：需同時符合)", "OR (寬鬆：符合任一即觸發)"], index=0 if "AND" in grp_data["logic"] else 1)
 
+# 1. 先把工具定義好
+def render_strategy_param(title, key_name, min_v, max_v, suffix=""):
+    c1, c2 = st.sidebar.columns([3, 1])
+    with c1:
+        grp_data[key_name]["val"] = st.slider(title, min_v, max_v, grp_data[key_name]["val"], label_visibility="collapsed")
+    with c2:
+        grp_data[key_name]["active"] = st.toggle("啟用", value=grp_data[key_name]["active"], key=f"tg_{key_name}")
+    status_text = "💡 已啟用" if grp_data[key_name]["active"] else "❌ 忽略"
+    st.sidebar.caption(f"{title}: **{grp_data[key_name]['val']}{suffix}** | {status_text}")
+
+# 2. 接下來才正式呼叫畫出滑桿
 render_strategy_param("價格突破均線", "price_ma", 5, 60, "天")
 render_strategy_param("N日均量線(跌破均量)", "volume_ma", 3, 20, "天")
 render_strategy_param("N日窒息量(創N日低)", "volume_min", 3, 20, "天")
