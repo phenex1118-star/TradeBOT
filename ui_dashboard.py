@@ -3,42 +3,50 @@ import json
 import os
 import yfinance as yf
 import pandas as pd
-import urllib.request
 import requests
 
 # ==========================================
-# 1. 100% 證交所繁中查名模組 (含明星級 ETF 保底字典)
+# 1. 輕量化 JSON 大字典讀取模組 (完全隔離、乾淨清爽)
 # ==========================================
 @st.cache_data(ttl=86400)
-def get_twse_stock_dict():
-    stock_dict = {}
-    apis = [
-        "https://openapi.twse.com.tw/v1/opendata/t187ap03_L", 
-        "https://openapi.tpex.org.tw/v1/opendata/t187ap03_O", 
-        "https://openapi.twse.com.tw/v1/opendata/t187ap03_E"  
-    ]
-    for url in apis:
+def load_local_stock_dict():
+    # 檢查旁邊有沒有 stock_dict.json 檔案
+    json_path = "stock_dict.json"
+    if os.path.exists(json_path):
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=5) as response:
-                for item in json.loads(response.read().decode('utf-8')):
-                    code = item.get('公司代號', item.get('證券代號', '')).strip()
-                    name = item.get('公司簡稱', item.get('證券名稱', '')).strip()
-                    if code and name:
-                        stock_dict[code] = name
-        except Exception: pass
-        
-    BOND_DICT = {
-        "0050": "元大台灣50", "0056": "元大高股息", 
-        "00757": "統一FANG+", "00878": "國泰永續高股息",
-        "00919": "群益台灣精選高息", "00929": "復華台灣科技優息"
-    }
-    stock_dict.update(BOND_DICT)
-    return stock_dict
+            with open(json_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
 
-def get_clean_stock_name(stock_id, twse_dict):
+def get_clean_stock_name(stock_id):
     pure_code = stock_id.split('.')[0]
-    return twse_dict.get(pure_code, f"台股 {pure_code}")
+    local_dict = load_local_stock_dict()
+    
+    # 第一層防線：直接從上傳的 2000 檔 JSON 大字典撈取（0延遲、不連網）
+    if pure_code in local_dict:
+        return local_dict[pure_code]
+    
+    # 智慧快取：避免短時間重複向 yfinance 查同一檔新股
+    cache_key = f"name_cache_{pure_code}"
+    if cache_key in st.session_state:
+        return st.session_state[cache_key]
+        
+    # 第二層防線：如果遇到未來新上市的股票，自動用 yfinance 線上查名補載
+    try:
+        ticker = yf.Ticker(stock_id)
+        info = ticker.info
+        ch_name = info.get('shortName') or info.get('longName') or info.get('name')
+        if ch_name:
+            for suffix in ["Taiwan", "Stock", "Co.,Ltd.", "Co.", "Ltd."]:
+                ch_name = ch_name.replace(suffix, "").strip()
+            st.session_state[cache_key] = ch_name
+            return ch_name
+    except:
+        pass
+        
+    return f"台股 {pure_code}"
 
 # ==========================================
 # 2. 瀏覽器獨立記憶體 (Session State) 多用戶隔離初始化
@@ -49,6 +57,7 @@ DEFAULT_GROUP_DATA = {
     "price_ma": {"val": 20, "active": True},
     "volume_ma": {"val": 5, "active": True},
     "volume_min": {"val": 5, "active": False},
+    "volume_burst": {"val": 2.5, "active": False}, 
     "rsi": {"val": 75, "active": False},
     "min_volume": {"val": 500, "active": False},
     "watch_list": []
@@ -67,12 +76,13 @@ if "user_cfg" not in st.session_state:
 
 if 'active_group' not in st.session_state: st.session_state.active_group = "群組一"
 if 'skip_login' not in st.session_state: st.session_state.skip_login = False
-# 🛠️ 用來暫存哪個按鈕正處於「等待第二次點擊確認」狀態的記憶卡
 if 'delete_confirm_target' not in st.session_state: st.session_state.delete_confirm_target = ""
 
 user_cfg = st.session_state.user_cfg
 active_group = st.session_state.active_group
 grp_data = user_cfg["groups"][active_group]
+
+if "volume_burst" not in grp_data: grp_data["volume_burst"] = {"val": 2.5, "active": False}
 
 def calculate_rsi(data, periods=14):
     close_delta = data['Close'].diff()
@@ -93,7 +103,6 @@ def send_telegram_alert(token, chat_id, message):
 # 3. 靜態主題與排版
 # ==========================================
 st.set_page_config(page_title="法人級多策略控制台", layout="wide")
-twse_dict = get_twse_stock_dict()
 
 st.markdown("""
     <style>
@@ -146,35 +155,33 @@ else:
         st.session_state.skip_login = False
         st.rerun()
 
-#  ✅ 正確的順序（先把功能寫好，底下再呼叫）
 st.sidebar.write("---")
 display_name = grp_data.get("custom_name") if grp_data.get("custom_name") else active_group
 
 st.sidebar.subheader(f"🎯 參數調整 ({display_name})")
 grp_data["logic"] = st.sidebar.selectbox("多重條件觸發規則", ["AND (嚴格：需同時符合)", "OR (寬鬆：符合任一即觸發)"], index=0 if "AND" in grp_data["logic"] else 1)
 
-# 1. 先把工具定義好
-def render_strategy_param(title, key_name, min_v, max_v, suffix=""):
+def render_strategy_param(title, key_name, min_v, max_v, suffix="", step=1.0):
     c1, c2 = st.sidebar.columns([3, 1])
     with c1:
-        grp_data[key_name]["val"] = st.slider(title, min_v, max_v, grp_data[key_name]["val"], label_visibility="collapsed")
+        grp_data[key_name]["val"] = st.slider(title, min_v, max_v, float(grp_data[key_name]["val"]), step=step, label_visibility="collapsed")
     with c2:
         grp_data[key_name]["active"] = st.toggle("啟用", value=grp_data[key_name]["active"], key=f"tg_{key_name}")
     status_text = "💡 已啟用" if grp_data[key_name]["active"] else "❌ 忽略"
     st.sidebar.caption(f"{title}: **{grp_data[key_name]['val']}{suffix}** | {status_text}")
 
-# 2. 接下來才正式呼叫畫出滑桿
-render_strategy_param("價格突破均線", "price_ma", 5, 60, "天")
-render_strategy_param("N日均量線(跌破均量)", "volume_ma", 3, 20, "天")
-render_strategy_param("N日窒息量(創N日低)", "volume_min", 3, 20, "天")
-render_strategy_param("RSI 熱度上限", "rsi", 40, 95, "波段")
-render_strategy_param("5日最低均量門檻", "min_volume", 100, 5000, "張")
+render_strategy_param("價格突破均線", "price_ma", 5.0, 60.0, "天", step=1.0)
+render_strategy_param("N日均量線(跌破均量)", "volume_ma", 3.0, 20.0, "天", step=1.0)
+render_strategy_param("前N日窒息量(排除今天)", "volume_min", 3.0, 20.0, "天", step=1.0) 
+render_strategy_param("當天爆量突破門檻", "volume_burst", 1.5, 10.0, "倍", step=0.5) 
+render_strategy_param("RSI 熱度上限", "rsi", 40.0, 95.0, "波段", step=1.0)
+render_strategy_param("5日最低均量門檻", "min_volume", 100.0, 5000.0, "張", step=100.0)
 
 st.sidebar.write("---")
 st.sidebar.info("💡 雲端模式：參數已即時鎖定在您的瀏覽器中。")
 
 # ==========================================
-# 6. 右側主畫面 (獨立動態分頁與改名)
+# 6. 右側主畫面
 # ==========================================
 name1 = user_cfg["groups"]["群組一"].get("custom_name") or "群組一"
 name2 = user_cfg["groups"]["群組二"].get("custom_name") or "群組二"
@@ -183,7 +190,7 @@ name3 = user_cfg["groups"]["群組三"].get("custom_name") or "群組三"
 c_tab1, c_tab2, c_tab3 = st.columns(3)
 if c_tab1.button(f"📂 【{name1}】", use_container_width=True, type="primary" if active_group == "群組一" else "secondary"):
     st.session_state.active_group = "群組一"
-    st.session_state.delete_confirm_target = "" # 切換分頁時重設刪除狀態
+    st.session_state.delete_confirm_target = ""
     st.rerun()
 if c_tab2.button(f"📂 【{name2}】", use_container_width=True, type="primary" if active_group == "群組二" else "secondary"):
     st.session_state.active_group = "群組二"
@@ -216,13 +223,16 @@ if st.button(f"🔄 立即刷新 {display_name} 數據與個人通報測試", ty
                 df = stock.history(period="30d")
                 if df.empty: continue
                 
-                ch_name = get_clean_stock_name(stock_id, twse_dict)
+                # 從上傳的獨立大字典撈名字
+                ch_name = get_clean_stock_name(stock_id)
                 latest = df.iloc[-1]
                 
-                ma_p_val = df['Close'].rolling(window=grp_data["price_ma"]["val"]).mean().iloc[-1]
-                ma_v_val = df['Volume'].rolling(window=grp_data["volume_ma"]["val"]).mean().iloc[-1]
-                v_min_days = grp_data["volume_min"]["val"]
-                vol_ndays_min = df['Volume'].tail(v_min_days).min()
+                ma_p_val = df['Close'].rolling(window=int(grp_data["price_ma"]["val"])).mean().iloc[-1]
+                ma_v_val = df['Volume'].rolling(window=int(grp_data["volume_ma"]["val"])).mean().iloc[-1]
+                
+                v_min_days = int(grp_data["volume_min"]["val"])
+                history_df = df.iloc[:-1]
+                vol_ndays_min = history_df['Volume'].tail(v_min_days).min() if len(history_df) >= v_min_days else 0
                 
                 df['RSI'] = calculate_rsi(df, 14)
                 rsi_val = df['RSI'].iloc[-1]
@@ -231,10 +241,11 @@ if st.button(f"🔄 立即刷新 {display_name} 數據與個人通報測試", ty
                 cond_p = (latest['Close'] > ma_p_val) if grp_data["price_ma"]["active"] else None
                 cond_v_ma = (latest['Volume'] < ma_v_val) if grp_data["volume_ma"]["active"] else None
                 cond_v_min = (latest['Volume'] <= vol_ndays_min) if grp_data["volume_min"]["active"] else None
+                cond_v_burst = (latest['Volume'] > (vol_5d_avg * grp_data["volume_burst"]["val"])) if grp_data["volume_burst"]["active"] else None
                 cond_rsi = (rsi_val < grp_data["rsi"]["val"]) if grp_data["rsi"]["active"] else None
                 cond_minv = (vol_5d_avg > (grp_data["min_volume"]["val"] * 1000)) if grp_data["min_volume"]["active"] else None
                 
-                active_conditions = [c for c in [cond_p, cond_v_ma, cond_v_min, cond_rsi, cond_minv] if c is not None]
+                active_conditions = [c for c in [cond_p, cond_v_ma, cond_v_min, cond_v_burst, cond_rsi, cond_minv] if c is not None]
                 
                 if not active_conditions: is_triggered = False
                 elif "AND" in grp_data["logic"]: is_triggered = all(active_conditions)
@@ -246,8 +257,8 @@ if st.button(f"🔄 立即刷新 {display_name} 數據與個人通報測試", ty
                     "收盤價": round(latest['Close'], 2),
                     "價格突破": "✅ 符合" if cond_p == True else ("❌ 未突破" if cond_p == False else "➖"),
                     "均量萎縮": "✅ 符合" if cond_v_ma == True else ("❌ 偏高" if cond_v_ma == False else "➖"),
-                    "創窒息量": "✅ 創低" if cond_v_min == True else ("❌ 未創低" if cond_v_min == False else "➖"),
-                    "RSI合規": "✅ 安全" if cond_rsi == True else ("⚠️ 過熱" if cond_rsi == False else "➖"),
+                    "前N日窒息": "✅ 創低" if cond_v_min == True else ("❌ 未創低" if cond_v_min == False else "➖"),
+                    "當天爆量": "💥 爆量!" if cond_v_burst == True else ("❌ 量平" if cond_v_burst == False else "➖"),
                     "綜合警報": "🔥 策略觸發！" if is_triggered else "⚪ 靜止"
                 })
                 
@@ -255,16 +266,15 @@ if st.button(f"🔄 立即刷新 {display_name} 數據與個人通報測試", ty
                     detail_list = []
                     if grp_data["price_ma"]["active"]: detail_list.append(f"  ├ 價格突破均線：{'✅ 符合' if cond_p else '❌ 未突破'}")
                     if grp_data["volume_ma"]["active"]: detail_list.append(f"  ├ N日均量線萎縮：{'✅ 符合' if cond_v_ma else '❌ 偏高'}")
-                    if grp_data["volume_min"]["active"]: detail_list.append(f"  ├ 創N日窒息量低：{'✅ 創低' if cond_v_min else '❌ 未創低'}")
+                    if grp_data["volume_min"]["active"]: detail_list.append(f"  ├ 前N日窒息量低：{'✅ 創低' if cond_v_min else '❌ 未創低'}")
+                    if grp_data["volume_burst"]["active"]: detail_list.append(f"  ├ 當天爆量門檻：{'💥 爆量達標' if cond_v_burst else '❌ 未達標'}")
                     if grp_data["rsi"]["active"]: detail_list.append(f"  ├ RSI熱度上限：{'✅ 安全' if cond_rsi else '⚠️ 過熱'}")
                     if grp_data["min_volume"]["active"]: detail_list.append(f"  ├ 最低均量門檻：{'✅ 達標' if cond_minv else '❌ 未達標'}")
                     triggered_stocks_for_tg.append((stock_id.split('.')[0], ch_name, latest['Close'], rsi_val, detail_list))
                     
             except Exception as e:
-                if "Too Many Requests" in str(e):
-                    st.error(f"⚠️ 標的 {stock_id} 觸發 Yahoo 限流防禦，請等 10 秒後再次嘗試。")
-                else:
-                    st.error(f"標的 {stock_id} 異常: {e}")
+                if "Too Many Requests" in str(e): st.error(f"⚠️ 標的 {stock_id} 限流，請等10秒重試。")
+                else: st.error(f"標的 {stock_id} 異常: {e}")
                 
         if summary_data:
             st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
@@ -273,12 +283,12 @@ if st.button(f"🔄 立即刷新 {display_name} 數據與個人通報測試", ty
                     detail_str = "\n".join(details)
                     tg_msg = (
                         f"🔔 *【雲端網頁觸發通報 - {display_name}】*\n"
-                        f"━━━━━━━━━━━━━━━━━━\n"
+                        f"━━━━━━━━━━━━━━━━\n"
                         f"📈 標的：`[{sid}] {name}`\n"
                         f"💰 當前收盤：`{price:.2f} 元`\n"
                         f"🔥 核心RSI值：`{rsi:.1f}`\n\n"
                         f"🛠️ 觸發篩選條件明細：\n{detail_str}\n"
-                        f"━━━━━━━━━━━━━━━━━━"
+                        f"━━━━━━━━━━━━━━━━"
                     )
                     send_telegram_alert(user_cfg["tg_token"], user_cfg["tg_chat_id"], tg_msg)
                 st.success("📩 Telegram 個人明細警報已成功發送至您的手機！")
@@ -296,7 +306,7 @@ with c_add2:
         formatted_stock = f"{new_stock}.TW"
         if formatted_stock not in grp_data["watch_list"]:
             grp_data["watch_list"].append(formatted_stock)
-            st.session_state.delete_confirm_target = "" # 新增時重設刪除鎖定
+            st.session_state.delete_confirm_target = ""
             st.rerun()
 
 st.write("目前監控中（具備防誤觸雙擊機制）：")
@@ -304,19 +314,13 @@ if grp_data["watch_list"]:
     cols_tags = st.columns(min(len(grp_data["watch_list"]), 6))
     for idx, stock_id in enumerate(grp_data["watch_list"]):
         with cols_tags[idx % 6]:
-            # 🛠️ 智慧判斷：這顆按鈕當前是不是正在被點擊第一次？
             is_waiting_confirm = (st.session_state.delete_confirm_target == stock_id)
-            
-            # 動態改變按鈕的文字與警告外殼
             btn_label = f"⚠️ 確定刪除 {stock_id.split('.')[0]}？" if is_waiting_confirm else f"{stock_id} ❌"
-            
             if st.button(btn_label, key=f"del_{stock_id}", use_container_width=True):
                 if is_waiting_confirm:
-                    # 第二次點擊：真正動刀切除股票
                     grp_data["watch_list"].remove(stock_id)
-                    st.session_state.delete_confirm_target = "" # 執行完畢解除鎖定
+                    st.session_state.delete_confirm_target = ""
                     st.rerun()
                 else:
-                    # 第一次點擊：按鈕進入黃色變身警示狀態，不刪除檔案
                     st.session_state.delete_confirm_target = stock_id
                     st.rerun()
