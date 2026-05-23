@@ -1,0 +1,88 @@
+{
+    "tg_token": "8946913503:AAEpmiN9mGJUnhqZXZM4ye4_KjTC0jVzs4M",
+    "tg_chat_id": "1087656746",
+    "theme": "🌌 普魯士夜藍 (Prussian Night)",
+    "groups": {
+        "群組一": {
+            "custom_name": "",
+            "logic": "AND (嚴格：需同時符合)",
+            "price_ma": {
+                "val": 20,
+                "active": true
+            },
+            "volume_ma": {
+                "val": 5,
+                "active": true
+            },
+            "volume_min": {
+                "val": 10,
+                "active": true
+            },
+            "rsi": {
+                "val": 75,
+                "active": false
+            },
+            "min_volume": {
+                "val": 500,
+                "active": false
+            },
+            "watch_list": [
+                "2330.TW",
+                "3533.TW",
+                "1513.TW",
+                "6510.TW",
+                "00757.TW"
+            ]
+        },
+        "群組二": {
+            "custom_name": "",
+            "logic": "AND (嚴格：需同時符合所有啟用條件)",
+            "price_ma": {
+                "val": 20,
+                "active": true
+            },
+            "volume_ma": {
+                "val": 5,
+                "active": true
+            },
+            "volume_min": {
+                "val": 5,
+                "active": false
+            },
+            "rsi": {
+                "val": 75,
+                "active": false
+            },
+            "min_volume": {
+                "val": 500,
+                "active": false
+            },
+            "watch_list": []
+        },
+        "群組三": {
+            "custom_name": "",
+            "logic": "AND (嚴格：需同時符合所有啟用條件)",
+            "price_ma": {
+                "val": 20,
+                "active": true
+            },
+            "volume_ma": {
+                "val": 5,
+                "active": true
+            },
+            "volume_min": {
+                "val": 5,
+                "active": false
+            },
+            "rsi": {
+                "val": 75,
+                "active": false
+            },
+            "min_volume": {
+                "val": 500,
+                "active": false
+            },
+            "watch_list": []
+        }
+    }
+}
