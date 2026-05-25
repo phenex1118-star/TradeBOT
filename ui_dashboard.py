@@ -275,7 +275,10 @@ if st.button(f"🔄 立即刷新 {display_name} 數據與個人通報測試", ty
                 cond_p = (latest['Close'] > ma_p_val) if grp_data["price_ma"]["active"] else None
                 cond_v_ma = (latest['Volume'] < ma_v_val) if grp_data["volume_ma"]["active"] else None
                 cond_v_min = (latest['Volume'] <= vol_ndays_min) if grp_data["volume_min"]["active"] else None
-                cond_v_burst = (latest['Volume'] > (vol_5d_avg * grp_data["volume_burst"]["val"])) if grp_data["volume_burst"]["active"] else None
+                cond_v_burst = (latest['Volume'] > (ma_v_val * grp_data["volume_burst"]["val"])) if grp_data["volume_burst"]["active"] else None
+                #上面為參考N日均量
+                #cond_v_burst = (latest['Volume'] > (vol_5d_avg * grp_data["volume_burst"]["val"])) if grp_data["volume_burst"]["active"] else None
+                #上面為僅參考5日均量
                 cond_rsi = (rsi_val < grp_data["rsi"]["val"]) if grp_data["rsi"]["active"] else None
                 cond_minv = (vol_5d_avg > (grp_data["min_volume"]["val"] * 1000)) if grp_data["min_volume"]["active"] else None
                 
