@@ -5,9 +5,15 @@ import yfinance as yf
 import pandas as pd
 import requests
 import re
-from streamlit_autorefresh import st_autorefresh
-from streamlit_javascript import st_javascript
-import streamlit.components.v1 as components
+
+# ==========================================
+# 0. 自動刷新套件安全載入檢查
+# ==========================================
+try:
+    from streamlit_autorefresh import st_autorefresh
+    HAS_AUTOREFRESH = True
+except ImportError:
+    HAS_AUTOREFRESH = False
 
 # ==========================================
 # 1. 系統核心配置與 UI 切邊修復
@@ -60,7 +66,7 @@ def get_clean_stock_name(stock_id):
     return f"台股 {pure_code}"
 
 # ==========================================
-# 3. 記憶體初始化、安全升級與 LocalStorage 自動讀取
+# 3. 記憶體初始化與 【URL 參數自動登入技術】
 # ==========================================
 DEFAULT_GROUP_DATA = {
     "custom_name": "", 
@@ -88,24 +94,15 @@ if "user_cfg" not in st.session_state:
         }
     }
 
-# --- 【新增】自動讀取瀏覽器 LocalStorage 憑證 ---
-local_token = st_javascript("localStorage.getItem('tg_token');")
-local_chat_id = st_javascript("localStorage.getItem('tg_chat_id');")
-
-# 如果瀏覽器有記住憑證，且當前 session 為空，自動執行登入並讀取雲端存檔
-if local_token and local_chat_id and not st.session_state.user_cfg["tg_token"]:
-    # 確保讀取到的不是奇怪的 JavaScript 空值或 'null' 字串
-    if local_token != "null" and local_chat_id != "null":
-        st.session_state.user_cfg["tg_token"] = local_token
-        st.session_state.user_cfg["tg_chat_id"] = local_chat_id
-        
-        filename = f"userdata_{local_chat_id}.json"
-        if os.path.exists(filename):
-            try:
-                with open(filename, "r", encoding="utf-8") as f:
-                    st.session_state.user_cfg = json.load(f)
-            except: pass
-        st.rerun()
+# 【核心修復】透過網址列的 uid 參數，實現 100% 穩定的無密碼自動登入
+if "uid" in st.query_params and not st.session_state.user_cfg["tg_token"]:
+    uid = st.query_params["uid"]
+    filename = f"userdata_{uid}.json"
+    if os.path.exists(filename):
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                st.session_state.user_cfg = json.load(f)
+        except: pass
 
 def save_user_config():
     chat_id = st.session_state.user_cfg.get("tg_chat_id")
@@ -146,7 +143,7 @@ def send_telegram_alert(token, chat_id, message):
     except: pass
 
 # ==========================================
-# 4. 漸進式登入頁面 (寫入 LocalStorage)
+# 4. 漸進式登入頁面
 # ==========================================
 has_tg_credentials = bool(user_cfg["tg_token"] and user_cfg["tg_chat_id"])
 
@@ -154,7 +151,7 @@ if not has_tg_credentials and not st.session_state.skip_login:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.title("📈 策略工作站系統登入")
-        st.write("請輸入您的 Telegram 通訊憑證。系統將自動綁定並記錄於您的瀏覽器中。")
+        st.write("請輸入您的 Telegram 通訊憑證。登入後將產生您的專屬網址，未來點擊網址即可自動登入。")
         temp_token = st.text_input("🤖 Telegram Bot Token", type="password")
         temp_chat_id = st.text_input("👤 Telegram Chat ID", type="password")
         
@@ -166,15 +163,14 @@ if not has_tg_credentials and not st.session_state.skip_login:
         
         c_btn1, c_btn2 = st.columns(2)
         with c_btn1:
-            if st.button("🔓 登入並記憶", type="primary", use_container_width=True) and temp_token and temp_chat_id and not input_error:
-                # 寫入 LocalStorage，並重新載入網頁來觸發頂部的自動讀取邏輯
-                components.html(f"""
-                    <script>
-                        localStorage.setItem('tg_token', '{temp_token}');
-                        localStorage.setItem('tg_chat_id', '{temp_chat_id}');
-                        window.parent.location.reload();
-                    </script>
-                """, height=0)
+            if st.button("🔓 綁定並登入", type="primary", use_container_width=True) and temp_token and temp_chat_id and not input_error:
+                # 將憑證寫入 Session 與存檔
+                st.session_state.user_cfg["tg_token"] = temp_token
+                st.session_state.user_cfg["tg_chat_id"] = temp_chat_id
+                save_user_config()
+                # 寫入專屬 URL 參數
+                st.query_params["uid"] = temp_chat_id
+                st.rerun()
         with c_btn2:
             if st.button("➡️ 略過 (僅看盤)", use_container_width=True):
                 st.session_state.skip_login = True
@@ -207,27 +203,28 @@ if not has_tg_credentials and not st.session_state.skip_login:
     st.stop()
 
 # ==========================================
-# 5. 左側控制台
+# 5. 左側控制台 與 自動巡航啟動區
 # ==========================================
 st.sidebar.title("⚙️ 交易控制面板")
 
-if has_tg_credentials:
-    # --- 【新增】自動巡航機制 (每 300,000 毫秒 = 5 分鐘) ---
+# 自動巡航模組 (強勢掛載)
+if HAS_AUTOREFRESH:
+    # interval=300000 為 5分鐘
     refresh_count = st_autorefresh(interval=300000, limit=None, key="strategy_autorefresh")
-    
-    st.sidebar.success(f"🟢 個人TG警報：已連線")
-    st.sidebar.info(f"⏱️ 背景巡航啟動中 (已自動刷新 {refresh_count} 次)")
-    
-    if st.sidebar.button("🔒 登出 (清除個人憑證)", use_container_width=True):
-        components.html("""
-            <script>
-                localStorage.removeItem('tg_token');
-                localStorage.removeItem('tg_chat_id');
-                window.parent.location.reload();
-            </script>
-        """, height=0)
+    st.sidebar.success(f"⏱️ 背景巡航啟動中 (已自動刷新 {refresh_count} 次)")
 else:
-    st.sidebar.warning("⚠️ TG警報：未串接")
+    st.sidebar.error("⚠️ 缺少自動刷新套件 (請在 requirements.txt 加入 streamlit-autorefresh)")
+
+if has_tg_credentials:
+    st.sidebar.info(f"🟢 TG通訊：連線正常")
+    if st.sidebar.button("🔒 登出 (清除個人憑證)", use_container_width=True):
+        st.session_state.user_cfg["tg_token"], st.session_state.user_cfg["tg_chat_id"] = "", ""
+        if "uid" in st.query_params:
+            del st.query_params["uid"]
+        st.session_state.skip_login = False
+        st.rerun()
+else:
+    st.sidebar.warning("⚠️ TG通訊：未串接")
     if st.sidebar.button("🔐 重新串接 Telegram", use_container_width=True):
         st.session_state.skip_login = False
         st.rerun()
@@ -300,7 +297,7 @@ with c_rename:
         grp_data["custom_name"] = new_name
         st.rerun()
 
-# 將觸發邏輯包裝起來，讓手動按鈕與自動迴圈都能呼叫
+# 讓自動迴圈與按鈕共用刷新邏輯
 with st.spinner("🚀 極速批次下載資料中，免疫 API 限流..."):
     summary_data = []
     triggered_stocks_for_tg = []
@@ -398,24 +395,27 @@ with st.spinner("🚀 極速批次下載資料中，免疫 API 限流..."):
             
     if summary_data:
         show_days = int(grp_data["spark_days"]["val"])
+        # 【核心修復】調整表格寬度與加入自適應 flexbox 排版，徹底消滅右側空白
         html_table = f"""<table style="width:100%; text-align:left; color:#FFFFFE; border-collapse: collapse; font-family: sans-serif; font-size:14px;">
 <tr style="border-bottom: 2px solid rgba(255,215,0,0.4); background-color: #161B33; font-weight: bold;">
 <th style="padding: 12px 8px;">代碼</th>
 <th style="padding: 12px 8px;">名稱</th>
 <th style="padding: 12px 8px;">現價</th>
 <th style="padding: 12px 8px;">漲跌</th>
-<th style="padding: 12px 8px; min-width:110px;">近 {show_days} 日量能K棒</th>
+<th style="padding: 12px 8px; width: 140px;">近 {show_days} 日量能K棒</th>
 <th style="padding: 12px 8px;">價MA/均量/窒息/爆量</th>
 <th style="padding: 12px 8px;">出場防護警示</th>
 <th style="padding: 12px 8px;">買進策略狀態</th>
 </tr>"""
         for res in summary_data:
-            spark_data, sparkline_html = res["sparkline_data"], '<div style="display: flex; align-items: flex-end; gap: 4px; height: 32px; padding-top:2px;">'
+            spark_data = res["sparkline_data"]
+            # 使用 flex: 1 讓 K 棒均勻填滿 140px 的欄位寬度
+            sparkline_html = '<div style="display: flex; align-items: flex-end; gap: 2px; height: 32px; width: 100%; max-width: 130px; padding-top: 2px;">'
             if spark_data:
                 max_vol = max([d["volume"] for d in spark_data]) or 1
                 for day in spark_data:
                     h_pct = max(12, int((day["volume"] / max_vol) * 100))
-                    sparkline_html += f'<div style="width: 12px; height: {h_pct}%; background-color: {day["color"]}; border-radius: 1px;" title="量: {day["volume"]:,}"></div>'
+                    sparkline_html += f'<div style="flex: 1; height: {h_pct}%; background-color: {day["color"]}; border-radius: 1px;" title="量: {day["volume"]:,}"></div>'
             else: sparkline_html += '<span style="color:#666; font-size:11px;">無數據</span>'
             sparkline_html += '</div>'
             
@@ -429,7 +429,7 @@ with st.spinner("🚀 極速批次下載資料中，免疫 API 限流..."):
 <td style="padding: 10px 8px;">{res["名稱(含ETF)"]}</td>
 <td style="padding: 10px 8px; font-weight: 600;">{res["收盤價"]}</td>
 <td style="padding: 10px 8px; color: {c_color}; font-weight: bold;">{res["漲跌幅"]}</td>
-<td style="padding: 10px 8px;">{sparkline_html}</td>
+<td style="padding: 10px 8px; vertical-align: middle;">{sparkline_html}</td>
 <td style="padding: 10px 8px; font-size:12px; color:#A0A5C1;">{q_status}</td>
 <td style="padding: 10px 8px; {w_style}">{res["出場警示"]}</td>
 <td style="padding: 10px 8px; {s_style}">{res["綜合警報"]}</td>
@@ -440,9 +440,8 @@ with st.spinner("🚀 極速批次下載資料中，免疫 API 限流..."):
         if triggered_stocks_for_tg and has_tg_credentials:
             for sid, name, price, rsi, details in triggered_stocks_for_tg:
                 detail_str = "\n".join(details)
-                tg_msg = f"🔔 *【自動巡航觸發通報 - {display_name}】*\n━━━━━━━━━━━━━━━━\n📈 標的：`[{sid}] {name}`\n💰 當前收盤：`{price:.2f} 元`\n🔥 核心RSI值：`{rsi:.1f}`\n\n🛠️ 觸發篩選條件明細：\n{detail_str}\n━━━━━━━━━━━━━━━━"
+                tg_msg = f"🔔 *【雲端網頁觸發通報 - {display_name}】*\n━━━━━━━━━━━━━━━━\n📈 標的：`[{sid}] {name}`\n💰 當前收盤：`{price:.2f} 元`\n🔥 核心RSI值：`{rsi:.1f}`\n\n🛠️ 觸發篩選條件明細：\n{detail_str}\n━━━━━━━━━━━━━━━━"
                 send_telegram_alert(user_cfg["tg_token"], user_cfg["tg_chat_id"], tg_msg)
-            # st.success 拿掉，避免自動刷新時一直跳出綠色框框干擾畫面
     else: st.info("清單目前為空。")
 
 # ==========================================
@@ -487,6 +486,6 @@ if grp_data["watch_list"]:
                     st.session_state.delete_confirm_target = sid
                     st.rerun()
 
-# 每次網頁互動至最底端時，執行一次雲端自動存檔
+# 每次網頁互動時執行雲端存檔
 if has_tg_credentials:
     save_user_config()
