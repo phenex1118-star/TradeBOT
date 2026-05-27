@@ -256,18 +256,16 @@ if watch_list:
     # ==========================================
     st.subheader("📊 策略即時監控快照（內嵌 5 日量能 K 棒）")
     
-    # 構建純 HTML 表格頭部
-    html_table = """
-    <table style="width:100%; text-align:left; color:#FFFFFE; border-collapse: collapse; font-family: sans-serif; font-size:15px;">
-      <tr style="border-bottom: 2px solid rgba(255,215,0,0.4); background-color: #161B33; font-weight: bold;">
-        <th style="padding: 14px 10px;">股票代碼</th>
-        <th style="padding: 14px 10px;">公司名稱</th>
-        <th style="padding: 14px 10px;">當前現價</th>
-        <th style="padding: 14px 10px;">今日漲跌</th>
-        <th style="padding: 14px 10px; min-width:150px;">近 5 日紅綠量能棒 (Sparklines)</th>
-        <th style="padding: 14px 10px;">量化策略狀態</th>
-      </tr>
-    """
+    # 構建純 HTML 表格頭部 (完全退縮排，避免觸發 Code Block)
+    html_table = """<table style="width:100%; text-align:left; color:#FFFFFE; border-collapse: collapse; font-family: sans-serif; font-size:15px;">
+<tr style="border-bottom: 2px solid rgba(255,215,0,0.4); background-color: #161B33; font-weight: bold;">
+<th style="padding: 14px 10px;">股票代碼</th>
+<th style="padding: 14px 10px;">公司名稱</th>
+<th style="padding: 14px 10px;">當前現價</th>
+<th style="padding: 14px 10px;">今日漲跌</th>
+<th style="padding: 14px 10px; min-width:150px;">近 5 日紅綠量能棒 (Sparklines)</th>
+<th style="padding: 14px 10px;">量化策略狀態</th>
+</tr>"""
     
     # 動態渲染每一檔股票的橫排資料
     for res in results:
@@ -290,16 +288,15 @@ if watch_list:
         change_color = "#FF3B30" if "+" in res["漲跌幅"] else ("#00E676" if "-" in res["漲跌幅"] else "#FFFFFE")
         status_style = "color: #F8CA00; font-weight: bold;" if "🟢" in res["策略狀態"] or "🔥" in res["策略狀態"] else "color: #A0A5C1;"
         
-        html_table += f"""
-          <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); background-color: rgba(255,255,255,0.01);">
-            <td style="padding: 12px 10px; font-weight: 600;">{res["代碼"]}</td>
-            <td style="padding: 12px 10px;">{res["名稱"]}</td>
-            <td style="padding: 12px 10px; font-weight: 600;">{res["現價"]}</td>
-            <td style="padding: 12px 10px; color: {change_color}; font-weight: bold;">{res["漲跌幅"]}</td>
-            <td style="padding: 12px 10px;">{sparkline_html}</td>
-            <td style="padding: 12px 10px; {status_style}">{res["策略狀態"]}</td>
-          </tr>
-        """
+        # 動態資料列 (完全退縮排)
+        html_table += f"""<tr style="border-bottom: 1px solid rgba(255,255,255,0.08); background-color: rgba(255,255,255,0.01);">
+<td style="padding: 12px 10px; font-weight: 600;">{res["代碼"]}</td>
+<td style="padding: 12px 10px;">{res["名稱"]}</td>
+<td style="padding: 12px 10px; font-weight: 600;">{res["現價"]}</td>
+<td style="padding: 12px 10px; color: {change_color}; font-weight: bold;">{res["漲跌幅"]}</td>
+<td style="padding: 12px 10px;">{sparkline_html}</td>
+<td style="padding: 12px 10px; {status_style}">{res["策略狀態"]}</td>
+</tr>"""
         
     html_table += "</table>"
     
