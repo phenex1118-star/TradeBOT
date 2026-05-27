@@ -282,20 +282,26 @@ if st.button(f"🔄 立即刷新 {display_name} 數據與通報", type="secondar
             try:
                 # 【限流終極解法】一次把所有股票代碼傳給 Yahoo，只消耗 1 次請求
                 tickers_str = " ".join(watch_list)
-                batch_data = yf.download(tickers_str, period="1y", group_by="ticker", progress=False)
+                # 修正：移除 group_by="ticker"，讓資料結構完美對接
+                batch_data = yf.download(tickers_str, period="1y", progress=False)
                 
                 for stock_id in watch_list:
-                    # 處理多欄位解析邏輯
+                    # 處理 yfinance 單檔與多檔結構不同的問題，並加入防呆除錯
                     if len(watch_list) == 1:
                         df = batch_data.copy()
                     else:
-                        df = pd.DataFrame({
-                            'Open': batch_data['Open'][stock_id],
-                            'High': batch_data['High'][stock_id],
-                            'Low': batch_data['Low'][stock_id],
-                            'Close': batch_data['Close'][stock_id],
-                            'Volume': batch_data['Volume'][stock_id]
-                        })
+                        try:
+                            df = pd.DataFrame({
+                                'Open': batch_data['Open'][stock_id],
+                                'High': batch_data['High'][stock_id],
+                                'Low': batch_data['Low'][stock_id],
+                                'Close': batch_data['Close'][stock_id],
+                                'Volume': batch_data['Volume'][stock_id]
+                            })
+                        except KeyError:
+                            # 萬一遇到無效代碼 (如查無此股)，安全略過不報錯
+                            continue
+                            
                     df = df.dropna()
                     
                     if df.empty: continue
