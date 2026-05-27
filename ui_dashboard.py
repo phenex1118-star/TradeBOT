@@ -393,7 +393,7 @@ with st.spinner("🚀 極速批次下載資料中，免疫 API 限流..."):
         except Exception as e:
             st.error(f"⚠️ 批量下載數據發生異常: {e}，請確認股票代碼是否正確。")
             
-if summary_data:
+    if summary_data:
         show_days = int(grp_data["spark_days"]["val"])
         # 【核心修復】外層加入具備 iOS 慣性滑動的 div 容器，表格加入強制不換行與最小寬度
         html_table = f"""<div style="overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 1rem; width: 100%;">
