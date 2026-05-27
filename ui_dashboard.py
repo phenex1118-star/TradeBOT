@@ -394,9 +394,10 @@ with st.spinner("🚀 極速批次下載資料中，免疫 API 限流..."):
             st.error(f"⚠️ 批量下載數據發生異常: {e}，請確認股票代碼是否正確。")
             
     if summary_data:
-        show_days = int(grp_data["spark_days"]["val"])
-        # 【核心修復】調整表格寬度與加入自適應 flexbox 排版，徹底消滅右側空白
-        html_table = f"""<table style="width:100%; text-align:left; color:#FFFFFE; border-collapse: collapse; font-family: sans-serif; font-size:14px;">
+            show_days = int(grp_data["spark_days"]["val"])
+            # 【核心修復】外層加入具備 iOS 慣性滑動的 div 容器，表格加入強制不換行與最小寬度
+            html_table = f"""<div style="overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 1rem; width: 100%;">
+<table style="width:100%; min-width: 850px; text-align:left; color:#FFFFFE; border-collapse: collapse; font-family: sans-serif; font-size:14px; white-space: nowrap;">
 <tr style="border-bottom: 2px solid rgba(255,215,0,0.4); background-color: #161B33; font-weight: bold;">
 <th style="padding: 12px 8px;">代碼</th>
 <th style="padding: 12px 8px;">名稱</th>
@@ -407,24 +408,24 @@ with st.spinner("🚀 極速批次下載資料中，免疫 API 限流..."):
 <th style="padding: 12px 8px;">出場防護警示</th>
 <th style="padding: 12px 8px;">買進策略狀態</th>
 </tr>"""
-        for res in summary_data:
-            spark_data = res["sparkline_data"]
-            # 使用 flex: 1 讓 K 棒均勻填滿 140px 的欄位寬度
-            sparkline_html = '<div style="display: flex; align-items: flex-end; gap: 2px; height: 32px; width: 100%; max-width: 130px; padding-top: 2px;">'
-            if spark_data:
-                max_vol = max([d["volume"] for d in spark_data]) or 1
-                for day in spark_data:
-                    h_pct = max(12, int((day["volume"] / max_vol) * 100))
-                    sparkline_html += f'<div style="flex: 1; height: {h_pct}%; background-color: {day["color"]}; border-radius: 1px;" title="量: {day["volume"]:,}"></div>'
-            else: sparkline_html += '<span style="color:#666; font-size:11px;">無數據</span>'
-            sparkline_html += '</div>'
-            
-            c_color = "#FF3B30" if "+" in res["漲跌幅"] else ("#00E676" if "-" in res["漲跌幅"] else "#FFFFFE")
-            s_style = "color: #F8CA00; font-weight: bold;" if "🔥" in res["綜合警報"] else "color: #A0A5C1;"
-            w_style = "color: #FF3B30; font-weight: bold;" if "🔴" in res["出場警示"] else "color: #A0A5C1;"
-            q_status = f"{res['價MA']}｜{res['均量']}｜{res['窒息']}｜{res['爆量']}"
-            
-            html_table += f"""<tr style="border-bottom: 1px solid rgba(255,255,255,0.08); background-color: rgba(255,255,255,0.01);">
+            for res in summary_data:
+                spark_data = res["sparkline_data"]
+                # 使用 flex: 1 讓 K 棒均勻填滿 140px 的欄位寬度
+                sparkline_html = '<div style="display: flex; align-items: flex-end; gap: 2px; height: 32px; width: 100%; max-width: 130px; padding-top: 2px;">'
+                if spark_data:
+                    max_vol = max([d["volume"] for d in spark_data]) or 1
+                    for day in spark_data:
+                        h_pct = max(12, int((day["volume"] / max_vol) * 100))
+                        sparkline_html += f'<div style="flex: 1; height: {h_pct}%; background-color: {day["color"]}; border-radius: 1px;" title="量: {day["volume"]:,}"></div>'
+                else: sparkline_html += '<span style="color:#666; font-size:11px;">無數據</span>'
+                sparkline_html += '</div>'
+                
+                c_color = "#FF3B30" if "+" in res["漲跌幅"] else ("#00E676" if "-" in res["漲跌幅"] else "#FFFFFE")
+                s_style = "color: #F8CA00; font-weight: bold;" if "🔥" in res["綜合警報"] else "color: #A0A5C1;"
+                w_style = "color: #FF3B30; font-weight: bold;" if "🔴" in res["出場警示"] else "color: #A0A5C1;"
+                q_status = f"{res['價MA']}｜{res['均量']}｜{res['窒息']}｜{res['爆量']}"
+                
+                html_table += f"""<tr style="border-bottom: 1px solid rgba(255,255,255,0.08); background-color: rgba(255,255,255,0.01);">
 <td style="padding: 10px 8px; font-weight: 600;">{res["股票代碼"]}</td>
 <td style="padding: 10px 8px;">{res["名稱(含ETF)"]}</td>
 <td style="padding: 10px 8px; font-weight: 600;">{res["收盤價"]}</td>
@@ -434,8 +435,10 @@ with st.spinner("🚀 極速批次下載資料中，免疫 API 限流..."):
 <td style="padding: 10px 8px; {w_style}">{res["出場警示"]}</td>
 <td style="padding: 10px 8px; {s_style}">{res["綜合警報"]}</td>
 </tr>"""
-        html_table += "</table>"
-        st.markdown(html_table, unsafe_allow_html=True)
+            
+            # 收合表格與外部 div 容器
+            html_table += "</table></div>"
+            st.markdown(html_table, unsafe_allow_html=True)
         
         if triggered_stocks_for_tg and has_tg_credentials:
             for sid, name, price, rsi, details in triggered_stocks_for_tg:
